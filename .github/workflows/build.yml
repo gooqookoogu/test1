@@ -1,0 +1,99 @@
+name: Build APK
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+      - run: |
+          mkdir -p app/src/main/java/com/example/toastapp app/src/main/res/values
+          
+          cat << 'EOF' > settings.gradle
+          rootProject.name = "ToastApp"
+          include ':app'
+          EOF
+
+          cat << 'EOF' > build.gradle
+          plugins {
+              id 'com.android.application' version '8.2.2' apply false
+          }
+          EOF
+
+          cat << 'EOF' > app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace 'com.example.toastapp'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.example.toastapp"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application android:label="ToastApp">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/example/toastapp/MainActivity.java
+          package com.example.toastapp;
+
+          import android.app.Activity;
+          import android.content.Intent;
+          import android.os.Bundle;
+          import android.widget.Toast;
+
+          public class MainActivity extends Activity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  showToast(getIntent());
+              }
+
+              @Override
+              protected void onNewIntent(Intent intent) {
+                  super.onNewIntent(intent);
+                  setIntent(intent);
+                  showToast(intent);
+              }
+
+              private void showToast(Intent intent) {
+                  if (intent == null) return;
+                  String msg = intent.getStringExtra("msg");
+                  if (msg == null && intent.hasExtra("msg")) {
+                      msg = String.valueOf(intent.getIntExtra("msg", 0));
+                  }
+                  if (msg == null) msg = "전달된 값이 없습니다.";
+                  Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+                  finish(); // Toast만 띄우고 창 바로 닫기
+              }
+          }
+          EOF
+          
+          chmod +x gradlew || gradle wrapper
+          ./gradlew assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
